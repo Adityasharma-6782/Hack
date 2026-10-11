@@ -125,6 +125,13 @@ export const submitAnswer = createServerFn({ method: "POST" })
 // ---------- Admin ----------
 const adminIn = z.object({ adminPassword: z.string() });
 
+export const adminVerify = createServerFn({ method: "POST" })
+  .inputValidator((d) => adminIn.parse(d))
+  .handler(async ({ data }) => {
+    const real = process.env["ADMIN_PASSWORD"];
+    return { valid: !!real && data.adminPassword === real };
+  });
+
 export const adminLeaderboard = createServerFn({ method: "POST" })
   .inputValidator((d) => adminIn.parse(d))
   .handler(async ({ data }) => {

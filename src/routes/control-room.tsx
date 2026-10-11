@@ -1,7 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { adminLeaderboard, adminCreateTeam, adminTeamAction, adminAnswers } from "@/lib/game.functions";
+import {
+  adminVerify,
+  adminLeaderboard,
+  adminCreateTeam,
+  adminTeamAction,
+  adminAnswers,
+} from "@/lib/game.functions";
 import { QuestionEditor } from "@/components/question-editor";
 
 export const Route = createFileRoute("/control-room")({
@@ -22,12 +28,14 @@ export const Route = createFileRoute("/control-room")({
 type Row = Awaited<ReturnType<typeof adminLeaderboard>>[number];
 
 function Admin() {
+  const verify = useServerFn(adminVerify);
   const board = useServerFn(adminLeaderboard);
   const create = useServerFn(adminCreateTeam);
   const act = useServerFn(adminTeamAction);
   const answers = useServerFn(adminAnswers);
   const [pw, setPw] = useState<string | null>(null);
   const [input, setInput] = useState(""); const [err, setErr] = useState("");
+  const [checking, setChecking] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
   const [keys, setKeys] = useState<Awaited<ReturnType<typeof adminAnswers>> | null>(null);
   const [tn, setTn] = useState(""); const [tp, setTp] = useState("");
@@ -36,17 +44,43 @@ function Admin() {
   const load = useCallback(async () => {
     if (!pw) return;
     try { setRows(await board({ data: { adminPassword: pw } })); }
-    catch { sessionStorage.removeItem("st_admin"); setPw(null); setErr("Wrong password"); }
+    catch (error) {
+      sessionStorage.removeItem("st_admin");
+      setPw(null);
+      const message = error instanceof Error ? error.message : "";
+      setErr(
+        message.includes("Wrong admin password")
+          ? "Wrong password"
+          : "Could not verify organizer access. Check the server terminal and .env settings, then restart the dev server.",
+      );
+    }
   }, [pw]);
   useEffect(() => { load(); const i = setInterval(load, 5000); return () => clearInterval(i); }, [load]);
 
   if (!pw) return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
       <h1 className="glow text-3xl font-bold text-primary">Control Room</h1>
-      <form className="mt-6 space-y-3" onSubmit={(e) => { e.preventDefault(); sessionStorage.setItem("st_admin", input); setErr(""); setPw(input); }}>
+      <form className="mt-6 space-y-3" onSubmit={async (e) => {
+        e.preventDefault();
+        setChecking(true);
+        setErr("");
+        try {
+          const result = await verify({ data: { adminPassword: input } });
+          if (!result.valid) {
+            setErr("Wrong password");
+            return;
+          }
+          sessionStorage.setItem("st_admin", input);
+          setPw(input);
+        } catch {
+          setErr("Could not verify organizer access. Check the server terminal and .env settings, then restart the dev server.");
+        } finally {
+          setChecking(false);
+        }
+      }}>
         <input type="password" className="w-full panel bg-background px-4 py-3 font-mono" placeholder="Organizer password" value={input} onChange={(e) => setInput(e.target.value)} />
         {err && <p className="font-mono text-sm text-destructive">{err}</p>}
-        <button className="w-full rounded-md bg-primary py-3 font-mono font-bold text-primary-foreground">Unlock</button>
+        <button disabled={checking} className="w-full rounded-md bg-primary py-3 font-mono font-bold text-primary-foreground disabled:opacity-50">{checking ? "Checking…" : "Unlock"}</button>
       </form>
     </main>
   );
