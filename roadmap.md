@@ -1,0 +1,3 @@
+- [x] Add persistent private question editing.
+- [x] Connect team questions and answer checking to saved edits.
+- [x] Verify editing and privacy safeguards.
